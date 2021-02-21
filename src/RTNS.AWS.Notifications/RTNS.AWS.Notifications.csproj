@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <AWSProjectType>Lambda</AWSProjectType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Amazon.Lambda.APIGatewayEvents" Version="2.4.0" />
+    <PackageReference Include="Amazon.Lambda.Core" Version="1.2.0" />
+    <PackageReference Include="Amazon.Lambda.Serialization.Json" Version="1.8.0" />
+    <PackageReference Include="Amazon.Lambda.SQSEvents" Version="1.2.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="2.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RTNS.AWS\RTNS.AWS.csproj" />
+    <ProjectReference Include="..\RTNS.Core\RTNS.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Amazon.Lambda.APIGatewayEvents">
+      <HintPath>..\..\..\..\Users\emil.slavov\.nuget\packages\amazon.lambda.apigatewayevents\1.2.0\lib\netstandard2.0\Amazon.Lambda.APIGatewayEvents.dll</HintPath>
+    </Reference>
+    <Reference Include="Amazon.Lambda.SQSEvents">
+      <HintPath>..\..\..\..\Users\emil.slavov\.nuget\packages\amazon.lambda.sqsevents\1.1.0\lib\netstandard2.0\Amazon.Lambda.SQSEvents.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

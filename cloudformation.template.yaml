@@ -1,0 +1,450 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: RTNS (Real-time notification system)
+
+Parameters:
+  EnvType:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - qa
+      - prod
+  SystemName:
+    Type: String
+    Default: RTNS
+  NotificationsQueueMessageRetentionPeriod:
+    Type: Number
+    Default: 120
+  LamdbaFunctionsMemorySize:
+    Type: Number
+    Default: 512
+    AllowedValues:
+      - 128
+      - 256
+      - 512
+      - 1024
+      - 1536
+      - 2048
+
+  SubscriptionsTableHashKey:
+    Type: String
+    Default: Subscriber
+    AllowedValues: 
+      - Subscriber
+  SubscriptionsTableRangeKey:
+    Type: String
+    Default: Topic
+    AllowedValues: 
+      - Topic
+  TopicSubscribersIndex:
+    Type: String
+    Default: TopicSubscribers
+    AllowedValues: 
+      - TopicSubscribers
+
+Mappings:
+  Domains:
+    dev:
+      RestDomainName: dev-api.apfie.com
+      WebSocketDomainName: dev-ws.apfie.com
+    qa: 
+      RestDomainName: qa-api.apfie.com
+      WebSocketDomainName: qa-ws.apfie.com
+    
+    prod:
+      RestDomainName: api.apfie.com
+      WebSocketDomainName: ws.apfie.com
+Resources:
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:           
+            - lambda.amazonaws.com
+            - apigateway.amazonaws.com 
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - lambda:InvokeFunction
+            - lambda:GetFunction
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - dynamodb:Get*
+            - dynamodb:Put*
+            - dynamodb:Query
+            - dynamodb:DeleteItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            Resource: 
+            - !Sub arn:aws:dynamodb:*:*:table/${SubscriptionsTable}   
+          - Effect: Allow
+            Action:
+            - sqs:ReceiveMessage   
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+            Resource: !GetAtt GoneQueue.Arn  
+
+  PublisherLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:           
+            - lambda.amazonaws.com
+            - apigateway.amazonaws.com 
+          Action:
+          - sts:AssumeRole
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - execute-api:Invoke
+            - execute-api:ManageConnections
+            Resource:
+            - !Sub arn:aws:execute-api:${AWS::Region}:*:${WebSocketApi}/${WebSocketApiStage}/POST/@connections/*
+          - Effect: Allow
+            Action:
+            - dynamodb:Get*
+            - dynamodb:Put*
+            - dynamodb:Query
+            - dynamodb:DeleteItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:BatchGetItem
+            Resource: 
+            - !Sub arn:aws:dynamodb:*:*:table/${SubscriptionsTable}*
+          - Effect: Allow
+            Action:            
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            Resource: "*"
+          - Effect: Allow
+            Action:            
+            - sqs:SendMessage
+            - sqs:SendMessageBatch
+            Resource: !GetAtt GoneQueue.Arn
+          - Effect: Allow
+            Action:
+            - sqs:ReceiveMessage   
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+            - sqs:SendMessage
+            - sqs:SendMessageBatch
+            Resource: !GetAtt NotificationsQueue.Arn  
+
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${EnvType}-${SystemName}-Websocket-Api"
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.message"
+
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "${EnvType}-${SystemName}-Rest-Api"
+
+  RestApiRootMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      AuthorizationType: "NONE"
+      HttpMethod: "POST"
+      Integration:
+        IntegrationHttpMethod: "POST"
+        Type: "AWS_PROXY"
+        Uri: 
+          !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${EnqueueNotificationsFunction.Arn}/invocations"
+      ResourceId: !Sub ${RestApi.RootResourceId}
+      RestApiId: !Sub ${RestApi}
+
+  InvokePublishPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt EnqueueNotificationsFunction.Arn
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/"
+
+  InvokeSubscribeFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt SubscribeFunction.Arn
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*"
+  
+  InvokeUnsubscribePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt UnsubscribeFunction.Arn
+      Principal: "apigateway.amazonaws.com"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*"
+  
+  SubscribeRoute:
+      Type: AWS::ApiGatewayV2::Route
+      Properties:
+        ApiId: !Ref WebSocketApi
+        RouteKey: subscribe
+        AuthorizationType: NONE
+        Target: !Sub integrations/${SubscribeIntegration}
+
+  SubscribeIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      Description: The integration for the subscribe route with the Subscribe function
+      IntegrationType: AWS_PROXY
+      CredentialsArn: !GetAtt LambdaExecutionRole.Arn
+      IntegrationUri: 
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SubscribeFunction.Arn}/invocations
+  
+  SubscribeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      MemorySize: !Ref LamdbaFunctionsMemorySize
+      Code: ./src/RTNS.AWS.Subscriptions/bin/release/netcoreapp3.1/publish
+      Runtime: dotnetcore3.1
+      Handler: RTNS.AWS.Subscriptions::RTNS.AWS.Subscriptions.Functions::Subscribe
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          SubscriptionsTableName: !Ref SubscriptionsTable  
+          TopicSubscribersIndex: !Ref TopicSubscribersIndex
+          SubscriptionsTableHashKey: !Ref SubscriptionsTableHashKey
+          SubscriptionsTableRangeKey: !Ref  SubscriptionsTableRangeKey
+  
+  RemoveGoneFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      MemorySize: !Ref LamdbaFunctionsMemorySize
+      Code: ./src/RTNS.AWS.Subscriptions/bin/release/netcoreapp3.1/publish
+      Runtime: dotnetcore3.1
+      Handler: RTNS.AWS.Subscriptions::RTNS.AWS.Subscriptions.Functions::RemoveGone
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          SubscriptionsTableName: !Ref SubscriptionsTable  
+          TopicSubscribersIndex: !Ref TopicSubscribersIndex
+          SubscriptionsTableHashKey: !Ref SubscriptionsTableHashKey
+          SubscriptionsTableRangeKey: !Ref  SubscriptionsTableRangeKey
+
+  RemoveGoneEventSourceMap:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt GoneQueue.Arn
+      FunctionName: !GetAtt RemoveGoneFunction.Arn
+
+  DisconnectRoute:
+      Type: AWS::ApiGatewayV2::Route
+      Properties:
+        ApiId: !Ref WebSocketApi
+        RouteKey: $disconnect
+        AuthorizationType: NONE
+        Target: !Sub integrations/${OnDisconnectIntegration}
+
+  OnDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      Description: The integration for the $disconnect route with the Unsubscribe function
+      IntegrationType: AWS_PROXY
+      CredentialsArn: !GetAtt LambdaExecutionRole.Arn
+      IntegrationUri: 
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnsubscribeFunction.Arn}/invocations
+
+  UnsubscribeRoute:
+      Type: AWS::ApiGatewayV2::Route
+      Properties:
+        ApiId: !Ref WebSocketApi
+        RouteKey: unsubscribe
+        AuthorizationType: NONE
+        Target: !Sub integrations/${UnsubscribeIntegration}
+
+  UnsubscribeIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      Description: The integration for the unsubscribe route with the Unsubscribe function
+      IntegrationType: AWS_PROXY
+      CredentialsArn: !GetAtt LambdaExecutionRole.Arn
+      IntegrationUri: 
+        !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UnsubscribeFunction.Arn}/invocations
+
+  UnsubscribeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      MemorySize: !Ref LamdbaFunctionsMemorySize
+      Code: ./src/RTNS.AWS.Subscriptions/bin/release/netcoreapp3.1/publish
+      Runtime: dotnetcore3.1
+      Handler: RTNS.AWS.Subscriptions::RTNS.AWS.Subscriptions.Functions::Unsubscribe
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          SubscriptionsTableName: !Ref SubscriptionsTable  
+          TopicSubscribersIndex: !Ref TopicSubscribersIndex
+          SubscriptionsTableHashKey: !Ref SubscriptionsTableHashKey
+          SubscriptionsTableRangeKey: !Ref  SubscriptionsTableRangeKey
+
+  EnqueueNotificationsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      MemorySize: !Ref LamdbaFunctionsMemorySize
+      Code: ./src/RTNS.AWS.Notifications/bin/release/netcoreapp3.1/publish
+      Runtime: dotnetcore3.1
+      Handler: RTNS.AWS.Notifications::RTNS.AWS.Notifications.Functions::EnqueueNotifications
+      Role: !GetAtt PublisherLambdaRole.Arn
+      Timeout: 120
+      Environment:
+        Variables:
+          SubscriptionsTableName: !Ref SubscriptionsTable  
+          TopicSubscribersIndex: !Ref TopicSubscribersIndex
+          SubscriptionsTableHashKey: !Ref SubscriptionsTableHashKey
+          SubscriptionsTableRangeKey: !Ref  SubscriptionsTableRangeKey
+          GoneQueueAddress: !Ref GoneQueue
+          NotificationsQueueAddress: !Ref NotificationsQueue
+          WebSocketApiEndpoint: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${WebSocketApiStage}
+
+  PushNotificationsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      MemorySize: !Ref LamdbaFunctionsMemorySize
+      Code: ./src/RTNS.AWS.Notifications/bin/release/netcoreapp3.1/publish
+      Runtime: dotnetcore3.1
+      Handler: RTNS.AWS.Notifications::RTNS.AWS.Notifications.Functions::PushNotifications
+      Role: !GetAtt PublisherLambdaRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          SubscriptionsTableName: !Ref SubscriptionsTable  
+          TopicSubscribersIndex: !Ref TopicSubscribersIndex
+          SubscriptionsTableHashKey: !Ref SubscriptionsTableHashKey
+          SubscriptionsTableRangeKey: !Ref  SubscriptionsTableRangeKey
+          GoneQueueAddress: !Ref GoneQueue
+          NotificationsQueueAddress: !Ref NotificationsQueue
+          WebSocketApiEndpoint: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${WebSocketApiStage}
+
+  PushNotificationsEventSourceMap:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt NotificationsQueue.Arn
+      FunctionName: !GetAtt PushNotificationsFunction.Arn
+      Enabled: true
+
+  NotificationsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${EnvType}-${SystemName}-NotificationsQueue
+      MessageRetentionPeriod: !Ref NotificationsQueueMessageRetentionPeriod
+  
+  GoneQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${EnvType}-${SystemName}-GoneQueue
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+    - DisconnectRoute
+    - SubscribeRoute
+    Properties:
+      ApiId: !Ref WebSocketApi
+
+  RestDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+    - RestApiRootMethod
+    Properties:
+      RestApiId: !Ref RestApi
+  
+  WebSocketApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: !Ref EnvType
+      ApiId: !Ref WebSocketApi
+      DeploymentId: !Ref Deployment
+
+  RestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: !Ref EnvType
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestDeployment
+
+  WebSocketApiMap:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      BasePath: !Sub ${EnvType}-${SystemName}-websocket
+      DomainName: !FindInMap [ Domains, !Ref EnvType, WebSocketDomainName ]
+      RestApiId: !Ref WebSocketApi
+      Stage: !Ref WebSocketApiStage
+
+  RestApiMap:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      BasePath: !Sub ${EnvType}-${SystemName}-notify
+      DomainName: !FindInMap [ Domains, !Ref EnvType, RestDomainName ]
+      RestApiId: !Ref RestApi
+      Stage: !Ref RestApiStage
+
+  SubscriptionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${EnvType}-${SystemName}-Subscriptions
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: 
+        - AttributeName: !Ref SubscriptionsTableHashKey
+          AttributeType: S
+        - AttributeName: !Ref SubscriptionsTableRangeKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: !Ref SubscriptionsTableHashKey
+          KeyType: HASH
+        - AttributeName: !Ref SubscriptionsTableRangeKey
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: !Ref TopicSubscribersIndex
+          KeySchema:
+            - AttributeName: !Ref SubscriptionsTableRangeKey
+              KeyType: HASH
+            - AttributeName: !Ref SubscriptionsTableHashKey
+              KeyType: RANGE
+          Projection:
+            ProjectionType: KEYS_ONLY  
+
+Outputs:
+  RestApiURIMapped:
+    Value:
+      !Sub 
+        - "https://${DomainName}/${EnvType}-${SystemName}-notify"
+        - DomainName: !FindInMap [ Domains, !Ref EnvType, RestDomainName ]
+  WebSocketApiURIMapped:
+    Value:
+      !Sub 
+        - "wss://${DomainName}/${EnvType}-${SystemName}-websocket"
+        - DomainName: !FindInMap [ Domains, !Ref EnvType, WebSocketDomainName ]
