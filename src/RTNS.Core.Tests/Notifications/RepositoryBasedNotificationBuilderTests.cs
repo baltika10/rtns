@@ -33,15 +33,15 @@ namespace RTNS.Core.Tests.Notifications
             await repo.Store(subscriptionC);
 
             var rbnb = new RepositoryBasedNotificationBuilder(repo);
-            var notificationsForTopic1 = await rbnb.BuildNotificationsFor(new[] {topic1});
+            var notificationsForTopic1 = await rbnb.BuildNotificationsFor(new[] {topic1}, "test");
             var notification = notificationsForTopic1[0];
 
             Assert.AreEqual(subscriberA, notification.Subscriber);
             Assert.AreEqual(topic1, notification.Topics[0]);
 
             Assert.That(() => notificationsForTopic1, Has.Exactly(1).Items);
-            Assert.That(async () => await rbnb.BuildNotificationsFor(new[] { topic2 }), Has.Exactly(2).Items);
-            Assert.That(async () => await rbnb.BuildNotificationsFor(new[] { topic3 }), Has.Exactly(1).Items);
+            Assert.That(async () => await rbnb.BuildNotificationsFor(new[] { topic2 }, "test"), Has.Exactly(2).Items);
+            Assert.That(async () => await rbnb.BuildNotificationsFor(new[] { topic3 }, "test"), Has.Exactly(1).Items);
 
 
         }

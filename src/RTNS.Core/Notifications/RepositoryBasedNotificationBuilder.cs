@@ -23,7 +23,7 @@
             this.subscriptionsRepository = subscriptionsRepository;
         }
 
-        public async Task<Notification[]> BuildNotificationsFor(Topic[] topics)
+        public async Task<Notification[]> BuildNotificationsFor(Topic[] topics, string message)
         {
             if (topics == null)
                 throw new ArgumentNullException(nameof(topics));
@@ -34,7 +34,7 @@
                 await LoadSubscribersOf(topic);
             }
 
-            return subscribersTopics.Select(st => new Notification(st.Key, st.Value.ToArray())).ToArray();
+            return subscribersTopics.Select(st => new Notification(st.Key, st.Value.ToArray(), message)).ToArray();
         }
 
             private async Task LoadSubscribersOf(Topic topic)

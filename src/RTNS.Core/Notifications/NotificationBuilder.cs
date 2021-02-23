@@ -6,6 +6,6 @@
 
     public interface NotificationBuilder
     {
-        Task<Notification[]> BuildNotificationsFor(Topic[] topics);
+        Task<Notification[]> BuildNotificationsFor(Topic[] topics, string message);
     }
 }

@@ -70,7 +70,8 @@
             {
                 var data = new
                 {
-                    topics = notification.Topics.Select(t => t.Name).ToArray()
+                    topics = notification.Topics.Select(t => t.Name).ToArray(),
+                    message = notification.Message
                 };
                 var serialized = JsonConvert.SerializeObject(data);
 

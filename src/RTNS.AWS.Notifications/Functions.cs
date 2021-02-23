@@ -38,11 +38,9 @@ namespace RTNS.AWS.Notifications
             try
             {
                 context.Logger.LogLine(request.Body);
-                var payload = JObject.Parse(request.Body)["topics"].ToString();
-                var topicNames = JsonConvert.DeserializeObject<string[]>(payload);
-                var topics = topicNames.Select(tn => new Topic(tn)).ToArray();
+                var notificationRequest = JsonConvert.DeserializeObject<NotificationRequest>(request.Body);
 
-                var notifications = await notificationBuilder.BuildNotificationsFor(topics);
+                var notifications = await notificationBuilder.BuildNotificationsFor(notificationRequest.Topics, notificationRequest.Message);
                 await notificationQueue.Enqueue(notifications);
 
                 var responseBody = new

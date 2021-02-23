@@ -26,17 +26,19 @@
 
         public async Task Warmup()
         {
-            await NotifyAbout(new Topic("warmup"));
+            var notificationRequest = new NotificationRequest(new[] { new Topic("warmup") }, "message");
+            await NotifyAbout(notificationRequest);
         }
 
-        public async Task<HttpResponseMessage> NotifyAbout(params Topic[] topics)
+        public async Task<HttpResponseMessage> NotifyAbout(NotificationRequest notificationRequest)
         {
-            if (!topics.Any())
-                throw new ArgumentException($"{nameof(topics)} must have at least one element!");
+            if (!notificationRequest.Topics.Any())
+                throw new ArgumentException($"{nameof(notificationRequest.Topics)} must have at least one element!");
             
             var sc = new StringContent(JsonConvert.SerializeObject(new
             {
-                topics = topics.Select(t => t.Name).ToArray()
+                topics = notificationRequest.Topics.Select(t => t.Name).ToArray(),
+                message = notificationRequest.Message
             }),
             Encoding.UTF8,
             "application/json");

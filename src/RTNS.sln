@@ -5,12 +5,12 @@ VisualStudioVersion = 16.0.28729.10
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deployment", "Deployment", "{4AD0592F-57E8-4289-B3AF-054C7C83C818}"
 	ProjectSection(SolutionItems) = preProject
-		cloudformation.template.yaml = cloudformation.template.yaml
-		publish-and-deploy-dev.ps1 = publish-and-deploy-dev.ps1
-		publish-and-deploy-prod.ps1 = publish-and-deploy-prod.ps1
-		publish-and-deploy-qa.ps1 = publish-and-deploy-qa.ps1
-		publish-and-deploy.ps1 = publish-and-deploy.ps1
-		publish-and-package-prod.ps1 = publish-and-package-prod.ps1
+		..\deployment\cloudformation.template.yaml = ..\deployment\cloudformation.template.yaml
+		..\deployment\publish-and-deploy-dev.ps1 = ..\deployment\publish-and-deploy-dev.ps1
+		..\deployment\publish-and-deploy-prod.ps1 = ..\deployment\publish-and-deploy-prod.ps1
+		..\deployment\publish-and-deploy-qa.ps1 = ..\deployment\publish-and-deploy-qa.ps1
+		..\deployment\publish-and-deploy.ps1 = ..\deployment\publish-and-deploy.ps1
+		..\deployment\publish-and-package-prod.ps1 = ..\deployment\publish-and-package-prod.ps1
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RTNS.Core", "RTNS.Core\RTNS.Core.csproj", "{770565D4-60F8-4844-BA3D-73EF96A3E5A2}"

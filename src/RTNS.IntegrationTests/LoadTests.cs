@@ -15,10 +15,10 @@ namespace RTNS.IntegrationTests
 {
     public class LoadTests
     {
-        private readonly Uri websocketUri = new Uri("wss://dev-ws.plexop.com/dev-public-RTNS-websocket");
-        private readonly Uri httpUri = new Uri("https://dev-api.plexop.com/dev-public-RTNS-notify");
+        private readonly Uri websocketUri = new Uri("wss://dev-ws.apfie.com/rtns");
+        private readonly Uri httpUri = new Uri("https://dev-api.apfie.com/rtns/dev-public-RTNS-notify");
 
-        private readonly Topic[] topics = new[] { new Topic("1") };
+        private readonly NotificationRequest notificationRequest = new NotificationRequest(new[] { new Topic("1") }, "testPayload");
 
         [TestCase(30)]
         [Ignore("Unfinished")]
@@ -36,7 +36,8 @@ namespace RTNS.IntegrationTests
             {
                 //var swInner = new Stopwatch();
                 //swInner.Start();
-                var response = await httpClient.NotifyAbout(topics);
+                
+                var response = await httpClient.NotifyAbout(notificationRequest);
                 //swInner.Stop();
                 var body = await response.Content.ReadAsStringAsync();
                 var notificationResponse = JsonConvert.DeserializeObject<NotificationResponse>(body);

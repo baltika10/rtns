@@ -17,16 +17,16 @@ namespace RTNS.IntegrationTests
     public class SmokeTests
     {
         // DEV
-        private readonly Uri websocketUri = new Uri("wss://dev-ws.plexop.com/dev-public-RTNS-websocket");
-        private readonly Uri httpUri = new Uri("https://dev-api.plexop.com/dev-public-RTNS-notify");
+        private readonly Uri websocketUri = new Uri("wss://dev-ws.apfie.com/rtns");
+        private readonly Uri httpUri = new Uri("https://dev-api.apfie.com/rtns/");
 
         // QA
-        //private readonly Uri websocketUri = new Uri("wss://qa-ws.plexop.com/qa-private-RTNS-websocket");
-        //private readonly Uri httpUri = new Uri("https://qa-api.plexop.com/qa-private-RTNS-notify");
+        //private readonly Uri websocketUri = new Uri("wss://qa-ws.apfie.com/qa-RTNS-websocket");
+        //private readonly Uri httpUri = new Uri("https://qa-api.apfie.com/rtns/");
 
         // PROD
-        //private readonly Uri websocketUri = new Uri("wss://ws.plexop.com/prod-public-RTNS-websocket");
-        //private readonly Uri httpUri = new Uri("https://api.plexop.com/prod-public-RTNS-notify");
+        //private readonly Uri websocketUri = new Uri("wss://ws.apfie.com/prod-RTNS-websocket");
+        //private readonly Uri httpUri = new Uri("https://api.apfie.com/rtns/");
 
         [TestCase(1)]
         public async Task ClientSubscribesToSingleTopic_ThenIsNotifiedSuccessfully(int topicsCount)
@@ -46,16 +46,19 @@ namespace RTNS.IntegrationTests
         [Test]
         public async Task ClientSubscribesToSelectedTopics_IsNotified_Unsubscribes_IsNotifiedOnlyOfRemaining()
         {
-            var topics = new Topic[] {new Topic("Topic1"), new Topic("Topic2") };
+            var messageContent = "testPayload";
+            var topic1 = "Topic1";
+            var topic2 = "Topic2";
+            var notificationRequest = new NotificationRequest(new[] { topic1, topic2 }, messageContent);
 
             var wsClient = new RtnsWebsocketClient(websocketUri);
             await wsClient.Unsubscribe(new Topic[] { new Topic("warmup") });
-            await wsClient.SubscribeAndStartListening(topics);
+            await wsClient.SubscribeAndStartListening(notificationRequest.Topics);
 
             var httpClient = new RtnsHttpClient(httpUri);
             await httpClient.Warmup();
 
-            await NotifyAndWaitForAnswer(topics, topics, httpClient, wsClient);
+            await NotifyAndWaitForAnswer(notificationRequest, notificationRequest.Topics, httpClient, wsClient);
 
             var unsubscribeFrom = new Topic[] { new Topic("Topic2") };
             await wsClient.Unsubscribe(unsubscribeFrom);
@@ -63,23 +66,25 @@ namespace RTNS.IntegrationTests
             Thread.Sleep(3000);
 
             var expectedTopics = new Topic[] { new Topic("Topic1") };
-            await NotifyAndWaitForAnswer(topics, expectedTopics, httpClient, wsClient);
+            await NotifyAndWaitForAnswer(notificationRequest, expectedTopics, httpClient, wsClient);
 
             await wsClient.Unsubscribe(new Topic[] { });
-            await NotifyAndWaitForAnswer(topics, new Topic[] { }, httpClient, wsClient);
+            await NotifyAndWaitForAnswer(notificationRequest, new Topic[] { }, httpClient, wsClient);
         }
 
         private static async Task NotifyAndWaitForAnswer(
-            Topic[] topics, 
+            NotificationRequest notificationRequest,
             Topic[] expected,
             RtnsHttpClient httpClient,
             RtnsWebsocketClient wsClient)
         {
-            await httpClient.NotifyAbout(topics);
+            
+            var notifyResult = await httpClient.NotifyAbout(notificationRequest);
 
             var expectedNotificationMessage = JsonConvert.SerializeObject(new
             {
-                topics = expected.Select(t => t.Name).ToArray()
+                topics = expected.Select(t => t.Name).ToArray(),
+                message = notificationRequest.Message
             });
             string notification = await wsClient.WaitForNotification(TimeSpan.FromSeconds(5));
             if (expected.Any())
@@ -90,12 +95,14 @@ namespace RTNS.IntegrationTests
 
         private async Task SusbcribeAndWaitForNotification(int topicsCount)
         {
+            var messageContent = "testPayload";
             var manyTopics = new List<Topic>();
 
             for (int i = 1; i <= topicsCount; i++)
             {
                 manyTopics.Add(new Topic($"Test_{i}"));
             }
+            var notificationRequest = new NotificationRequest(manyTopics, messageContent);
 
             var wsClient = new RtnsWebsocketClient(websocketUri);
             await wsClient.SubscribeAndStartListening(manyTopics.ToArray());
@@ -103,11 +110,12 @@ namespace RTNS.IntegrationTests
             var httpClient = new RtnsHttpClient(httpUri);
             await httpClient.Warmup();
 
-            await httpClient.NotifyAbout(manyTopics.ToArray());
+            await httpClient.NotifyAbout(notificationRequest);
 
             var expectedNotificationMessage = JsonConvert.SerializeObject(new
             {
-                topics = manyTopics.Select(t => t.Name).ToArray()
+                topics = manyTopics.Select(t => t.Name).ToArray(),
+                message = messageContent
             });
             string notification = await wsClient.WaitForNotification(TimeSpan.FromSeconds(30));
             Assert.AreEqual(expectedNotificationMessage, notification);
