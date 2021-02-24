@@ -45,6 +45,6 @@ if ($justStorePackagedTemplate) {
 	exit 0;
 }
 
-aws cloudformation deploy --template-file $tempFolder/packaged-template.yaml --stack-name $StackName --capabilities CAPABILITY_IAM --s3-bucket $buckets[$EnvType]  --s3-prefix RTNS --parameter-overrides EnvType=$EnvType EnvName=$EnvName --profile $NamedProfile
+aws cloudformation deploy --template-file $tempFolder/packaged-template.yaml --stack-name $StackName --capabilities CAPABILITY_NAMED_IAM --s3-bucket $buckets[$EnvType]  --s3-prefix RTNS --parameter-overrides EnvType=$EnvType EnvName=$EnvName --profile $NamedProfile
 
 Remove-Item $tempFolder -Recurse

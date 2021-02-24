@@ -43,9 +43,9 @@ namespace RTNS.AWS.Notifications
                 var notifications = await notificationBuilder.BuildNotificationsFor(notificationRequest.Topics, notificationRequest.Message);
                 await notificationQueue.Enqueue(notifications);
 
-                var responseBody = new
+                var responseBody = new SendNotificationResponse
                 {
-                    totalNotifications = notifications.Length
+                    TotalNotifications = notifications.Length
                 };
                 return new APIGatewayProxyResponse
                 {

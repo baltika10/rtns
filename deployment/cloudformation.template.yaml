@@ -208,6 +208,7 @@ Resources:
       ApiId: !Ref RestApi
       RouteKey: POST /
       Target: !Sub 'integrations/${RestApiRootMethodIntegration}'
+      AuthorizationType: AWS_IAM
 
   SubscribeRoute:
       Type: AWS::ApiGatewayV2::Route
@@ -444,15 +445,36 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: KEYS_ONLY  
-
+  InvokePushNotificationPolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      Description: "Policy that provide permission to invoke API GW to send the RTNS notification"
+      ManagedPolicyName: !Sub "${EnvType}-send-rtns-notification"
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+            - "execute-api:Invoke"
+          Resource: 
+            !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${EnvType}/POST/*"
 Outputs:
-  RestApiURIMapped:
+  RestApiURI:
     Value:
       !Sub 
-        - "https://${DomainName}/${EnvType}-${SystemName}-notify"
+        - "https://${DomainName}/rtns/"
         - DomainName: !FindInMap [ Domains, !Ref EnvType, RestDomainName ]
-  WebSocketApiURIMapped:
+    Export:
+      Name: !Sub '${EnvType}-RTNS-PushNotificationUri'
+
+  PolicyArnForSendingPushNotifications:
+    Value:
+      !Ref InvokePushNotificationPolicy
+    Export:
+      Name: !Sub ${EnvType}-RTNS-PushNotificationPolicyArn
+      
+  WebSocketApiURI:
     Value:
       !Sub 
-        - "wss://${DomainName}/${EnvType}-${SystemName}-websocket"
+        - "wss://${DomainName}/rtns"
         - DomainName: !FindInMap [ Domains, !Ref EnvType, WebSocketDomainName ]

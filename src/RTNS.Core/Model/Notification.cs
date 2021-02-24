@@ -1,24 +1,27 @@
 ﻿namespace RTNS.Core.Model
 {
-    using Newtonsoft.Json;
     using System;
-    using System.Collections.Generic;
     using System.Linq;
 
-    public class NotificationRequest
+    public class Notification
     {
-        [JsonConstructor]
-        public NotificationRequest(string[] topics, string message)
+        public Notification(Subscriber subscriber, Topic[] topics, string message)
         {
-            Topics = topics.Select(name => new Topic(name)).ToArray();
+            if (subscriber == null)
+                throw new ArgumentNullException(nameof(subscriber));
+
+            if (topics == null)
+                throw new ArgumentNullException(nameof(topics));
+
+            if (!topics.Any())
+                throw new ArgumentException($"{nameof(topics)} can't be empty!");
+
+            Subscriber = subscriber;
+            Topics = topics;
             Message = message;
         }
 
-        public NotificationRequest(IEnumerable<Topic> topics, string message)
-        {
-            Topics = topics.ToArray();
-            Message = message;
-        }
+        public Subscriber Subscriber { get; }
 
         public Topic[] Topics { get; }
 

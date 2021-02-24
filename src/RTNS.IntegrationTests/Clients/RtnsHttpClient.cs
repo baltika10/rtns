@@ -1,27 +1,34 @@
 ﻿namespace RTNS.IntegrationTests.Clients
 {
     using System;
+    using System.IO;
     using System.Linq;
+    using System.Net;
     using System.Net.Http;
     using System.Text;
     using System.Threading.Tasks;
-
     using Newtonsoft.Json;
 
     using RTNS.Core.Model;
+    using Amazon.Runtime;
+    using Amazon.SecurityToken;
 
     internal class RtnsHttpClient
     {
         private readonly HttpClient client;
         private readonly Uri httpServerAddress;
+        private readonly ImmutableCredentials credentials;
 
         public RtnsHttpClient(Uri httpServerAddress)
         {
-            if(httpServerAddress == null)
+            if (httpServerAddress == null)
                 throw new ArgumentNullException(nameof(httpServerAddress));
 
             this.httpServerAddress = httpServerAddress;
             client = new HttpClient();
+            var sts = new AmazonSecurityTokenServiceClient();
+            var token = sts.GetSessionTokenAsync().Result;
+            credentials = new ImmutableCredentials(token.Credentials.AccessKeyId, token.Credentials.SecretAccessKey, token.Credentials.SessionToken);
         }
 
         public async Task Warmup()
@@ -30,20 +37,28 @@
             await NotifyAbout(notificationRequest);
         }
 
-        public async Task<HttpResponseMessage> NotifyAbout(NotificationRequest notificationRequest)
+        public async Task<int> NotifyAbout(NotificationRequest notificationRequest)
         {
             if (!notificationRequest.Topics.Any())
                 throw new ArgumentException($"{nameof(notificationRequest.Topics)} must have at least one element!");
-            
-            var sc = new StringContent(JsonConvert.SerializeObject(new
+
+            var serializedContent = JsonConvert.SerializeObject(new
             {
                 topics = notificationRequest.Topics.Select(t => t.Name).ToArray(),
                 message = notificationRequest.Message
-            }),
-            Encoding.UTF8,
-            "application/json");
+            });
 
-            return await client.PostAsync(httpServerAddress, sc);
+
+            var sc = new StringContent(serializedContent, Encoding.UTF8, "application/json");
+            var response = await client.PostAsync(
+                  httpServerAddress,
+                  content: sc,
+                  regionName: "eu-central-1",
+                  serviceName: "execute-api",
+                  credentials: credentials);
+            var responseContent =  await response.Content.ReadAsStringAsync();
+            var parsedResponse = JsonConvert.DeserializeObject<SendNotificationResponse>(responseContent);
+            return parsedResponse.TotalNotifications;
         }
     }
 }
