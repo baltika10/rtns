@@ -206,7 +206,7 @@ Resources:
     DependsOn: RestApiRootMethodIntegration
     Properties:
       ApiId: !Ref RestApi
-      RouteKey: POST /
+      RouteKey: POST /publishMessage
       Target: !Sub 'integrations/${RestApiRootMethodIntegration}'
       AuthorizationType: AWS_IAM
 
@@ -458,6 +458,12 @@ Resources:
             - "execute-api:Invoke"
           Resource: 
             !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${EnvType}/POST/*"
+        - Effect: Allow
+          Action:
+            - "lambda:Invoke*"
+            - "lambda:GetFunction"
+          Resource:
+            !GetAtt EnqueueNotificationsFunction.Arn
 Outputs:
   RestApiURI:
     Value:
