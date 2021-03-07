@@ -54,8 +54,8 @@ Mappings:
       WebSocketDomainName: qa-ws.apfie.com
     
     prod:
-      RestDomainName: api.apfie.com
-      WebSocketDomainName: ws.apfie.com
+      RestDomainName: prod-api.apfie.com
+      WebSocketDomainName: prod-ws.apfie.com
 Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
